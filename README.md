@@ -490,6 +490,8 @@ The goal is to create both a useful tool and a foundation for others to build up
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
+This repository is based on [Handy](https://github.com/cjpais/Handy) by CJ Pais and includes custom modifications.
+
 ## Acknowledgments
 
 - **Whisper** by OpenAI for the speech recognition model
