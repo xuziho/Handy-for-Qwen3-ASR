@@ -1,501 +1,159 @@
 # Handy
 
-[![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com/invite/WVBeWsNXK4)
+这是我基于上游项目 [cjpais/Handy](https://github.com/cjpais/Handy) 做的一个中文使用场景定制版本。
 
-**A free, open source, and extensible speech-to-text application that works completely offline.**
+它仍然是一个本地离线语音转文字桌面应用，核心能力是：
 
-Handy is a cross-platform desktop application that provides simple, privacy-focused speech transcription. Press a shortcut, speak, and have your words appear in any text field. This happens on your own computer without sending any information to the cloud.
+- 按快捷键开始录音
+- 本地完成语音识别
+- 将结果自动粘贴到当前输入框
+- 支持术语纠错、AI 后处理、历史记录、桌面悬浮状态条
 
-## Why Handy?
+这个仓库主要保留我自己实际会用到的能力说明，不再完整复述上游 README。若你想了解原项目的完整背景、社区讨论和官方说明，请直接查看上游仓库：
 
-Handy was created to fill the gap for a truly open source, extensible speech-to-text tool. As stated on [handy.computer](https://handy.computer):
+- 上游项目：[https://github.com/cjpais/Handy](https://github.com/cjpais/Handy)
 
-- **Free**: Accessibility tooling belongs in everyone's hands, not behind a paywall
-- **Open Source**: Together we can build further. Extend Handy for yourself and contribute to something bigger
-- **Private**: Your voice stays on your computer. Get transcriptions without sending audio to the cloud
-- **Simple**: One tool, one job. Transcribe what you say and put it into a text box
+## 我这边新增或调整的内容
 
-Handy isn't trying to be the best speech-to-text app—it's trying to be the most forkable one.
+相较于上游版本，这个版本目前主要做了这些定制：
 
-## How It Works
+### 1. AI 后处理可参考术语纠错词典
 
-1. **Press** a configurable keyboard shortcut to start/stop recording (or use push-to-talk mode)
-2. **Speak** your words while the shortcut is active
-3. **Release** and Handy processes your speech using Whisper
-4. **Get** your transcribed text pasted directly into whatever app you're using
+在原有后处理链路上，新增了一个独立开关，可以控制是否把“术语纠错”里的启用规则一并作为上下文提交给 AI。
 
-The process is entirely local:
+当前行为是：
 
-- Silence is filtered using VAD (Voice Activity Detection) with Silero
-- Transcription uses your choice of models:
-  - **Whisper models** (Small/Medium/Turbo/Large) with GPU acceleration when available
-  - **Parakeet V3** - CPU-optimized model with excellent performance and automatic language detection
-- Works on Windows, macOS, and Linux
+- 原始转录先经过本地术语纠错
+- 如果开启 AI 后处理，并且开启“附带术语纠错上下文”
+- Handy 会把启用中的术语规则整理成提示词上下文，再发给 AI
+- AI 返回后，再对结果重跑一次术语纠错，作为兜底
 
-## Quick Start
+这样做的目的，是让 AI 不只是机械清理文本，还能参考你定义的“正确术语”和“常见误识别样本”来修正 ASR 错字。
 
-### Installation
+### 2. 术语纠错提示模板可编辑
 
-1. Download the latest release from the [releases page](https://github.com/cjpais/Handy/releases) or the [website](https://handy.computer)
-   - **macOS**: Also available via [Homebrew cask](https://formulae.brew.sh/cask/handy): `brew install --cask handy`
-   - **Windows**: Also available via [winget](https://github.com/microsoft/winget-pkgs): `winget install cjpais.Handy` \
-     **Note:** The Homebrew cask and winget package are not maintained by the Handy developers.
-2. Install the application
-3. Launch Handy and grant necessary system permissions (microphone, accessibility)
-4. Configure your preferred keyboard shortcuts in Settings
-5. Start transcribing!
+原本这部分提示词是写死在代码里的。现在已经改成：
 
-### Development Setup
+- 用户可在设置里直接编辑
+- 支持 `${term_corrections}` 占位符
+- 可保存
+- 可一键重置为默认模板
 
-For detailed build instructions including platform-specific requirements, see [BUILD.md](BUILD.md).
+这意味着你可以按自己的模型特性去调整提示策略，而不是被固定 prompt 限死。
 
-## Integrations
+### 3. 支持调试查看完整 AI 后处理请求
 
-<a href="https://www.raycast.com/mattiacolombomc/handy" title="Install Handy Raycast Extension"><img src="https://www.raycast.com/mattiacolombomc/handy/install_button@2x.png?v=1.1" height="64" style="height: 64px;" alt="Install handy Raycast Extension" /></a>
+为了排查本地模型行为，我加了一个临时调试开关。开启后可以在日志里看到完整的后处理请求内容，包括：
 
-Control Handy from [Raycast](https://www.raycast.com) — start/stop recording, browse transcript history, manage dictionary, switch models and languages.
+- provider
+- model
+- messages
+- system prompt
+- user content
 
-[Source](https://github.com/mattiacolombomc/raycast-handy) · by [@mattiacolombomc](https://github.com/mattiacolombomc)
+这样在接 LM Studio 或其他本地 OpenAI-compatible 服务时，更容易确认到底发了什么给模型。
 
-## Architecture
+### 4. Custom provider 改为使用 `system + user` 结构
 
-Handy is built as a Tauri application combining:
+针对本地模型接口的兼容性，我把 `custom provider` 的后处理请求调整成：
 
-- **Frontend**: React + TypeScript with Tailwind CSS for the settings UI
-- **Backend**: Rust for system integration, audio processing, and ML inference
-- **Core Libraries**:
-  - `whisper-rs`: Local speech recognition with Whisper models
-  - `transcribe-rs`: CPU-optimized speech recognition with Parakeet models
-  - `cpal`: Cross-platform audio I/O
-  - `vad-rs`: Voice Activity Detection
-  - `rdev`: Global keyboard shortcuts and system events
-  - `rubato`: Audio resampling
+- `system`: 后处理规则与术语上下文
+- `user`: 原始转录文本
 
-### Debug Mode
+而不是把所有内容拼成一整段单条 user prompt。  
+这通常会让模型更容易遵守指令，尤其是本地 chat 模型。
 
-Handy includes an advanced debug mode for development and troubleshooting. Access it by pressing:
+### 5. `language Chinese` 之类的脏标记在 AI 前清理
 
-- **macOS**: `Cmd+Shift+D`
-- **Windows/Linux**: `Ctrl+Shift+D`
+原本这类奇怪短语是在 AI 后处理之后再删。现在已经改成：
 
-### CLI Parameters
+- 在送给 AI 之前先清理
 
-Handy supports command-line flags for controlling a running instance and customizing startup behavior. These work on all platforms (macOS, Windows, Linux).
+这样可以避免模型把这些脏标记改造成新的半残文本，导致后面更难清掉。
 
-**Remote control flags** (sent to an already-running instance via the single-instance plugin):
+### 6. Overlay UI 做了简化
+
+底部黑色状态条做过一轮轻量化调整，目前更偏向低干扰风格：
+
+- 更小巧
+- 中间只保留简短英文状态
+- 去掉了占空间但信息量不高的点阵显示
+
+## 当前项目定位
+
+这个版本依然是一个 **本地优先、桌面优先、中文口述场景友好** 的语音输入工具。
+
+比较适合这些使用方式：
+
+- 日常口述输入
+- 需要术语纠错的专业表达
+- 用本地模型做二次润色
+- 对隐私和本地部署有要求的场景
+
+## 技术栈
+
+- 前端：React + TypeScript + Vite + Tailwind
+- 桌面壳：Tauri 2.x
+- 后端：Rust
+- 本地语音识别：Whisper / Parakeet / Qwen HTTP 等
+- 状态管理：Zustand
+- 国际化：i18next
+
+## 开发与运行
+
+### 安装依赖
 
 ```bash
-handy --toggle-transcription    # Toggle recording on/off
-handy --toggle-post-process     # Toggle recording with post-processing on/off
-handy --cancel                  # Cancel the current operation
+bun install
 ```
 
-**Startup flags:**
+### 开发模式
 
 ```bash
-handy --start-hidden            # Start without showing the main window
-handy --no-tray                 # Start without the system tray icon
-handy --debug                   # Enable debug mode with verbose logging
-handy --help                    # Show all available flags
+bun run tauri dev
 ```
 
-Flags can be combined for autostart scenarios:
+### 前端单独运行
 
 ```bash
-handy --start-hidden --no-tray
+bun run dev
 ```
 
-> **macOS tip:** When Handy is installed as an app bundle, invoke the binary directly:
->
-> ```bash
-> /Applications/Handy.app/Contents/MacOS/Handy --toggle-transcription
-> ```
-
-## Known Issues & Current Limitations
-
-This project is actively being developed and has some [known issues](https://github.com/cjpais/Handy/issues). We believe in transparency about the current state:
-
-### Major Issues (Help Wanted)
-
-**Whisper Model Crashes:**
-
-- Whisper models crash on certain system configurations (Windows and Linux)
-- Does not affect all systems - issue is configuration-dependent
-  - If you experience crashes and are a developer, please help to fix and provide debug logs!
-
-**Wayland Support (Linux):**
-
-- Limited support for Wayland display server
-- Requires [`wtype`](https://github.com/atx/wtype) or [`dotool`](https://sr.ht/~geb/dotool/) for text input to work correctly (see [Linux Notes](#linux-notes) below for installation)
-
-### Linux Notes
-
-**Text Input Tools:**
-
-For reliable text input on Linux, install the appropriate tool for your display server:
-
-| Display Server | Recommended Tool | Install Command                                    |
-| -------------- | ---------------- | -------------------------------------------------- |
-| X11            | `xdotool`        | `sudo apt install xdotool`                         |
-| Wayland        | `wtype`          | `sudo apt install wtype`                           |
-| Both           | `dotool`         | `sudo apt install dotool` (requires `input` group) |
-
-- **X11**: Install `xdotool` for both direct typing and clipboard paste shortcuts
-- **Wayland**: Install `wtype` (preferred) or `dotool` for text input to work correctly
-- **dotool setup**: Requires adding your user to the `input` group: `sudo usermod -aG input $USER` (then log out and back in)
-
-Without these tools, Handy falls back to enigo which may have limited compatibility, especially on Wayland.
-
-**Other Notes:**
-
-- **Runtime library dependency (`libgtk-layer-shell.so.0`)**:
-  - Handy links `gtk-layer-shell` on Linux. If startup fails with `error while loading shared libraries: libgtk-layer-shell.so.0`, install the runtime package for your distro:
-
-    | Distro        | Package to install    | Example command                        |
-    | ------------- | --------------------- | -------------------------------------- |
-    | Ubuntu/Debian | `libgtk-layer-shell0` | `sudo apt install libgtk-layer-shell0` |
-    | Fedora/RHEL   | `gtk-layer-shell`     | `sudo dnf install gtk-layer-shell`     |
-    | Arch Linux    | `gtk-layer-shell`     | `sudo pacman -S gtk-layer-shell`       |
-
-  - For building from source on Ubuntu/Debian, you may also need `libgtk-layer-shell-dev`.
-
-- The recording overlay is disabled by default on Linux (`Overlay Position: None`) because certain compositors treat it as the active window. When the overlay is visible it can steal focus, which prevents Handy from pasting back into the application that triggered transcription. If you enable the overlay anyway, be aware that clipboard-based pasting might fail or end up in the wrong window.
-- If you are having trouble with the app, running with the environment variable `WEBKIT_DISABLE_DMABUF_RENDERER=1` may help
-- If Handy fails to start reliably on Linux, see [Troubleshooting → Linux Startup Crashes or Instability](#linux-startup-crashes-or-instability).
-- **Global keyboard shortcuts (Wayland):** On Wayland, system-level shortcuts must be configured through your desktop environment or window manager. Use the [CLI flags](#cli-parameters) as the command for your custom shortcut.
-
-  **GNOME:**
-  1. Open **Settings > Keyboard > Keyboard Shortcuts > Custom Shortcuts**
-  2. Click the **+** button to add a new shortcut
-  3. Set the **Name** to `Toggle Handy Transcription`
-  4. Set the **Command** to `handy --toggle-transcription`
-  5. Click **Set Shortcut** and press your desired key combination (e.g., `Super+O`)
-
-  **KDE Plasma:**
-  1. Open **System Settings > Shortcuts > Custom Shortcuts**
-  2. Click **Edit > New > Global Shortcut > Command/URL**
-  3. Name it `Toggle Handy Transcription`
-  4. In the **Trigger** tab, set your desired key combination
-  5. In the **Action** tab, set the command to `handy --toggle-transcription`
-
-  **Sway / i3:**
-
-  Add to your config file (`~/.config/sway/config` or `~/.config/i3/config`):
-
-  ```ini
-  bindsym $mod+o exec handy --toggle-transcription
-  ```
-
-  **Hyprland:**
-
-  Add to your config file (`~/.config/hypr/hyprland.conf`):
-
-  ```ini
-  bind = $mainMod, O, exec, handy --toggle-transcription
-  ```
-
-- You can also manage global shortcuts outside of Handy via Unix signals, which lets Wayland window managers or other hotkey daemons keep ownership of keybindings:
-
-  | Signal    | Action                                    | Example                |
-  | --------- | ----------------------------------------- | ---------------------- |
-  | `SIGUSR2` | Toggle transcription                      | `pkill -USR2 -n handy` |
-  | `SIGUSR1` | Toggle transcription with post-processing | `pkill -USR1 -n handy` |
-
-  Example Sway config:
-
-  ```ini
-  bindsym $mod+o exec pkill -USR2 -n handy
-  bindsym $mod+p exec pkill -USR1 -n handy
-  ```
-
-  `pkill` here simply delivers the signal—it does not terminate the process.
-
-### Platform Support
-
-- **macOS (both Intel and Apple Silicon)**
-- **x64 Windows**
-- **x64 Linux**
-
-### System Requirements/Recommendations
-
-The following are recommendations for running Handy on your own machine. If you don't meet the system requirements, the performance of the application may be degraded. We are working on improving the performance across all kinds of computers and hardware.
-
-**For Whisper Models:**
-
-- **macOS**: M series Mac, Intel Mac
-- **Windows**: Intel, AMD, or NVIDIA GPU
-- **Linux**: Intel, AMD, or NVIDIA GPU
-  - Ubuntu 22.04, 24.04
-
-**For Parakeet V3 Model:**
-
-- **CPU-only operation** - runs on a wide variety of hardware
-- **Minimum**: Intel Skylake (6th gen) or equivalent AMD processors
-- **Performance**: ~5x real-time speed on mid-range hardware (tested on i5)
-- **Automatic language detection** - no manual language selection required
-
-## Roadmap & Active Development
-
-We're actively working on several features and improvements. Contributions and feedback are welcome!
-
-### In Progress
-
-**Debug Logging:**
-
-- Adding debug logging to a file to help diagnose issues
-
-**macOS Keyboard Improvements:**
-
-- Support for Globe key as transcription trigger
-- A rewrite of global shortcut handling for MacOS, and potentially other OS's too.
-
-**Opt-in Analytics:**
-
-- Collect anonymous usage data to help improve Handy
-- Privacy-first approach with clear opt-in
-
-**Settings Refactoring:**
-
-- Cleanup and refactor settings system which is becoming bloated and messy
-- Implement better abstractions for settings management
-
-**Tauri Commands Cleanup:**
-
-- Abstract and organize Tauri command patterns
-- Investigate tauri-specta for improved type safety and organization
-
-## Verify Release Signatures
-
-Handy release artifacts are signed with Tauri's updater signature format. The public key is stored in [`src-tauri/tauri.conf.json`](src-tauri/tauri.conf.json) under `plugins.updater.pubkey`.
-
-To verify a release manually, set `ARTIFACT` to the filename you downloaded, save the `pubkey` value from `src-tauri/tauri.conf.json` to `handy.pub.b64`, then decode the public key and matching `.sig` file from base64 and verify the artifact with `minisign`:
+### 打包
 
 ```bash
-# Replace with the file you downloaded
-ARTIFACT="Handy_0.8.1_amd64.AppImage"
-
-python3 - "$ARTIFACT" <<'PY'
-import base64, pathlib, sys
-
-artifact = sys.argv[1]
-
-pub = pathlib.Path("handy.pub.b64").read_text().strip()
-pathlib.Path("handy.pub").write_bytes(base64.b64decode(pub))
-
-sig = pathlib.Path(f"{artifact}.sig").read_text().strip()
-pathlib.Path(f"{artifact}.minisig").write_bytes(base64.b64decode(sig))
-PY
-
-minisign -Vm "$ARTIFACT" \
-  -p handy.pub \
-  -x "$ARTIFACT.minisig"
+bun run tauri build
 ```
 
-On success, `minisign` prints:
+Windows 当前默认会生成 NSIS 安装包。
 
-```text
-Signature and comment signature verified
-```
+## 打包产物
 
-Do not use `gpg` for these `.sig` files.
+当前 Windows 打包成功后，主要产物在：
 
-## Troubleshooting
+- 安装包：`src-tauri/target/release/bundle/nsis/Handy_0.8.2_x64-setup.exe`
+- 可执行文件：`src-tauri/target/release/handy.exe`
 
-### Manual Model Installation (For Proxy Users or Network Restrictions)
+如果本地打包最后提示 updater 签名失败，但安装包已经生成，通常是因为没有配置 `TAURI_SIGNING_PRIVATE_KEY`。这种情况下安装包本身仍然可以正常使用。
 
-If you're behind a proxy, firewall, or in a restricted network environment where Handy cannot download models automatically, you can manually download and install them. The URLs are publicly accessible from any browser.
+## 上游项目说明
 
-#### Step 1: Find Your App Data Directory
+本仓库并不是上游官方仓库，而是基于以下项目进行修改：
 
-1. Open Handy settings
-2. Navigate to the **About** section
-3. Copy the "App Data Directory" path shown there, or use the shortcuts:
-   - **macOS**: `Cmd+Shift+D` to open debug menu
-   - **Windows/Linux**: `Ctrl+Shift+D` to open debug menu
+- 上游仓库：[cjpais/Handy](https://github.com/cjpais/Handy)
 
-The typical paths are:
+如果你想：
 
-- **macOS**: `~/Library/Application Support/com.pais.handy/`
-- **Windows**: `C:\Users\{username}\AppData\Roaming\com.pais.handy\`
-- **Linux**: `~/.config/com.pais.handy/`
+- 查看原作者的完整路线图
+- 关注官方发布
+- 提交与上游通用能力有关的 issue / PR
 
-#### Step 2: Create Models Directory
-
-Inside your app data directory, create a `models` folder if it doesn't already exist:
-
-```bash
-# macOS/Linux
-mkdir -p ~/Library/Application\ Support/com.pais.handy/models
-
-# Windows (PowerShell)
-New-Item -ItemType Directory -Force -Path "$env:APPDATA\com.pais.handy\models"
-```
-
-#### Step 3: Download Model Files
-
-Download the models you want from below
-
-**Whisper Models (single .bin files):**
-
-- Small (487 MB): `https://blob.handy.computer/ggml-small.bin`
-- Medium (492 MB): `https://blob.handy.computer/whisper-medium-q4_1.bin`
-- Turbo (1600 MB): `https://blob.handy.computer/ggml-large-v3-turbo.bin`
-- Large (1100 MB): `https://blob.handy.computer/ggml-large-v3-q5_0.bin`
-
-**Parakeet Models (compressed archives):**
-
-- V2 (473 MB): `https://blob.handy.computer/parakeet-v2-int8.tar.gz`
-- V3 (478 MB): `https://blob.handy.computer/parakeet-v3-int8.tar.gz`
-
-#### Step 4: Install Models
-
-**For Whisper Models (.bin files):**
-
-Simply place the `.bin` file directly into the `models` directory:
-
-```
-{app_data_dir}/models/
-├── ggml-small.bin
-├── whisper-medium-q4_1.bin
-├── ggml-large-v3-turbo.bin
-└── ggml-large-v3-q5_0.bin
-```
-
-**For Parakeet Models (.tar.gz archives):**
-
-1. Extract the `.tar.gz` file
-2. Place the **extracted directory** into the `models` folder
-3. The directory must be named exactly as follows:
-   - **Parakeet V2**: `parakeet-tdt-0.6b-v2-int8`
-   - **Parakeet V3**: `parakeet-tdt-0.6b-v3-int8`
-
-Final structure should look like:
-
-```
-{app_data_dir}/models/
-├── parakeet-tdt-0.6b-v2-int8/     (directory with model files inside)
-│   ├── (model files)
-│   └── (config files)
-└── parakeet-tdt-0.6b-v3-int8/     (directory with model files inside)
-    ├── (model files)
-    └── (config files)
-```
-
-**Important Notes:**
-
-- For Parakeet models, the extracted directory name **must** match exactly as shown above
-- Do not rename the `.bin` files for Whisper models—use the exact filenames from the download URLs
-- After placing the files, restart Handy to detect the new models
-
-#### Step 5: Verify Installation
-
-1. Restart Handy
-2. Open Settings → Models
-3. Your manually installed models should now appear as "Downloaded"
-4. Select the model you want to use and test transcription
-
-### Custom Whisper Models
-
-Handy can auto-discover custom Whisper GGML models placed in the `models` directory. This is useful for users who want to use fine-tuned or community models not included in the default model list.
-
-**How to use:**
-
-1. Obtain a Whisper model in GGML `.bin` format (e.g., from [Hugging Face](https://huggingface.co/models?search=whisper%20ggml))
-2. Place the `.bin` file in your `models` directory (see paths above)
-3. Restart Handy to discover the new model
-4. The model will appear in the "Custom Models" section of the Models settings page
-
-**Important:**
-
-- Community models are user-provided and may not receive troubleshooting assistance
-- The model must be a valid Whisper GGML format (`.bin` file)
-- Model name is derived from the filename (e.g., `my-custom-model.bin` → "My Custom Model")
-
-### Linux Startup Crashes or Instability
-
-If Handy fails to start reliably on Linux — for example, it crashes shortly after launch, never shows its window, or reports a Wayland protocol error — try the steps below in order.
-
-**1. Install (or reinstall) `gtk-layer-shell`**
-
-Handy uses `gtk-layer-shell` for its recording overlay and links against it at runtime. A missing or broken installation is the most common cause of startup failures and can manifest as a crash or a hang well before any window is shown. Make sure the runtime package is installed for your distro:
-
-| Distro        | Package to install    | Example command                        |
-| ------------- | --------------------- | -------------------------------------- |
-| Ubuntu/Debian | `libgtk-layer-shell0` | `sudo apt install libgtk-layer-shell0` |
-| Fedora/RHEL   | `gtk-layer-shell`     | `sudo dnf install gtk-layer-shell`     |
-| Arch Linux    | `gtk-layer-shell`     | `sudo pacman -S gtk-layer-shell`       |
-
-If it is already installed and you still see startup problems, try reinstalling it (e.g. `sudo pacman -S gtk-layer-shell` again) in case the library files were corrupted by a partial upgrade.
-
-**2. Disable the GTK layer shell overlay (`HANDY_NO_GTK_LAYER_SHELL`)**
-
-If installing the library does not help, you can skip `gtk-layer-shell` initialization entirely as a workaround. On some compositors (notably KDE Plasma under Wayland) it has been reported to interact poorly with the recording overlay. With this variable set, the overlay falls back to a regular always-on-top window:
-
-```bash
-HANDY_NO_GTK_LAYER_SHELL=1 handy
-```
-
-**3. Disable WebKit DMA-BUF renderer (`WEBKIT_DISABLE_DMABUF_RENDERER`)**
-
-On some GPU/driver combinations the WebKitGTK DMA-BUF renderer can cause the window to fail to render or to crash. Try:
-
-```bash
-WEBKIT_DISABLE_DMABUF_RENDERER=1 handy
-```
-
-**Making a workaround permanent**
-
-Once you've found a flag that helps, export it from your shell profile (`~/.bashrc`, `~/.zshenv`, …) or from the desktop autostart entry that launches Handy. If you launch Handy from a `.desktop` file, you can prefix the `Exec=` line, e.g.:
-
-```ini
-Exec=env HANDY_NO_GTK_LAYER_SHELL=1 handy
-```
-
-If a workaround helps you, please [open an issue](https://github.com/cjpais/Handy/issues) describing your distro, desktop environment, and session type — that information helps us narrow down the underlying bug.
-
-### How to Contribute
-
-1. **Check existing issues** at [github.com/cjpais/Handy/issues](https://github.com/cjpais/Handy/issues)
-2. **Fork the repository** and create a feature branch
-3. **Test thoroughly** on your target platform
-4. **Submit a pull request** with clear description of changes
-5. **Join the discussion** - reach out at [contact@handy.computer](mailto:contact@handy.computer)
-
-The goal is to create both a useful tool and a foundation for others to build upon—a well-patterned, simple codebase that serves the community.
-
-## Sponsors
-
-<div align="center">
-  We're grateful for the support of our sponsors who help make Handy possible:
-  <br><br>
-  <a href="https://wordcab.com">
-    <img src="sponsor-images/wordcab.png" alt="Wordcab" width="120" height="120">
-  </a>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://github.com/epicenter-so/epicenter">
-    <img src="sponsor-images/epicenter.png" alt="Epicenter" width="120" height="120">
-  </a>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://boltai.com?utm_source=handy">
-    <img src="sponsor-images/boltai.jpg" alt="Bolt AI" width="120" height="120">
-  </a>
-</div>
-
-## Related Projects
-
-- **[Handy CLI](https://github.com/cjpais/handy-cli)** - The original Python command-line version
-- **[handy.computer](https://handy.computer)** - Project website with demos and documentation
+建议直接去上游仓库。
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+本仓库基于上游项目的 MIT License 分发。
 
-This repository is based on [Handy](https://github.com/cjpais/Handy) by CJ Pais and includes custom modifications.
-
-## Acknowledgments
-
-- **Whisper** by OpenAI for the speech recognition model
-- **whisper.cpp and ggml** for amazing cross-platform whisper inference/acceleration
-- **Silero** for great lightweight VAD
-- **Tauri** team for the excellent Rust-based app framework
-- **Community contributors** helping make Handy better
+- 原许可证见：[LICENSE](LICENSE)
+- 上游版权归原作者所有
+- 本仓库保留对原项目的来源说明，并包含我自己的定制修改
