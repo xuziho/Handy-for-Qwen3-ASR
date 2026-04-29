@@ -6,7 +6,7 @@ on:
 jobs:
   build-macos-dmg:
     permissions:
-      contents: read
+      contents: write
     strategy:
       fail-fast: false
       matrix:
