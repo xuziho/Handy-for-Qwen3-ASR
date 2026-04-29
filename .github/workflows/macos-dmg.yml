@@ -1,0 +1,27 @@
+name: "macOS DMG"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-macos-dmg:
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest"
+            target: "x86_64-apple-darwin"
+          - platform: "macos-26"
+            target: "aarch64-apple-darwin"
+
+    uses: ./.github/workflows/build.yml
+    with:
+      platform: ${{ matrix.platform }}
+      target: ${{ matrix.target }}
+      build-args: "--bundles dmg --target ${{ matrix.target }}"
+      sign-binaries: false
+      asset-prefix: "handy-macos"
+      upload-artifacts: true
+    secrets: inherit
