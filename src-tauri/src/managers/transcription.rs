@@ -317,7 +317,11 @@ impl TranscriptionManager {
         }
 
         let timeout_sec = settings.qwen_timeout_sec.max(1);
+        // Local Qwen ASR is expected to live on localhost/WSL bridge endpoints.
+        // Bypass system proxy settings here so local ASR requests do not get
+        // redirected to HTTP proxy tools like Clash and fail with 502s.
         let client = Client::builder()
+            .no_proxy()
             .timeout(Duration::from_secs(timeout_sec))
             .build()?;
 
