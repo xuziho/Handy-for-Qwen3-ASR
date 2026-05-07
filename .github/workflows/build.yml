@@ -337,6 +337,16 @@ jobs:
             '.bundle.linux.deb.files["/usr/lib/libonnxruntime.so"] = $so | .bundle.linux.deb.files["/usr/lib/libonnxruntime.so.1"] = $so1 | .bundle.linux.deb.files["/usr/lib/libonnxruntime.so.1.24.2"] = $sov' \
             src-tauri/tauri.conf.json > tmp.json && mv tmp.json src-tauri/tauri.conf.json
 
+      - name: Disable updater artifacts for unsigned builds
+        if: ${{ !inputs.sign-binaries }}
+        shell: pwsh
+        run: |
+          $configPath = "src-tauri/tauri.conf.json"
+          $config = Get-Content $configPath -Raw | ConvertFrom-Json
+          $config.bundle.createUpdaterArtifacts = $false
+          $config | ConvertTo-Json -Depth 100 | Set-Content $configPath
+          Write-Host "Disabled createUpdaterArtifacts for unsigned build."
+
       - name: Build with Tauri
         uses: tauri-apps/tauri-action@v0
         env:
