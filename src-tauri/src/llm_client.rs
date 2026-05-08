@@ -4,6 +4,7 @@ use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE, REFER
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::net::IpAddr;
 
 #[derive(Debug, Serialize)]
 struct ChatMessage {
@@ -118,15 +119,18 @@ fn base_url_uses_loopback(base_url: &str) -> bool {
         return false;
     };
 
-    match url.host() {
-        Some(reqwest::Host::Domain(host)) => {
-            host.eq_ignore_ascii_case("localhost")
-                || host.eq_ignore_ascii_case("localhost.localdomain")
-        }
-        Some(reqwest::Host::Ipv4(ip)) => ip.is_loopback(),
-        Some(reqwest::Host::Ipv6(ip)) => ip.is_loopback(),
-        None => false,
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+
+    if host.eq_ignore_ascii_case("localhost") || host.eq_ignore_ascii_case("localhost.localdomain")
+    {
+        return true;
     }
+
+    host.parse::<IpAddr>()
+        .map(|ip| ip.is_loopback())
+        .unwrap_or(false)
 }
 
 /// Send a chat completion request to an OpenAI-compatible API

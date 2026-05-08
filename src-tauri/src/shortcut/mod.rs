@@ -17,6 +17,7 @@ use log::{error, info, warn};
 use reqwest::Url;
 use serde::Serialize;
 use specta::Type;
+use std::net::IpAddr;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
 
@@ -47,15 +48,18 @@ fn base_url_uses_loopback(base_url: &str) -> bool {
         return false;
     };
 
-    match url.host() {
-        Some(reqwest::Host::Domain(host)) => {
-            host.eq_ignore_ascii_case("localhost")
-                || host.eq_ignore_ascii_case("localhost.localdomain")
-        }
-        Some(reqwest::Host::Ipv4(ip)) => ip.is_loopback(),
-        Some(reqwest::Host::Ipv6(ip)) => ip.is_loopback(),
-        None => false,
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+
+    if host.eq_ignore_ascii_case("localhost") || host.eq_ignore_ascii_case("localhost.localdomain")
+    {
+        return true;
     }
+
+    host.parse::<IpAddr>()
+        .map(|ip| ip.is_loopback())
+        .unwrap_or(false)
 }
 
 // Note: Commands are accessed via shortcut::handy_keys:: in lib.rs
