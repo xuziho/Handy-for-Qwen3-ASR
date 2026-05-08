@@ -1,6 +1,7 @@
 use crate::settings::PostProcessProvider;
 use log::debug;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE, REFERER, USER_AGENT};
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -99,10 +100,33 @@ fn build_headers(provider: &PostProcessProvider, api_key: &str) -> Result<Header
 /// Create an HTTP client with provider-specific headers
 fn create_client(provider: &PostProcessProvider, api_key: &str) -> Result<reqwest::Client, String> {
     let headers = build_headers(provider, api_key)?;
-    reqwest::Client::builder()
-        .default_headers(headers)
+    let mut builder = reqwest::Client::builder().default_headers(headers);
+
+    // Local OpenAI-compatible endpoints should bypass inherited system proxies
+    // so post-processing continues to work when tools like Clash are enabled.
+    if base_url_uses_loopback(&provider.base_url) {
+        builder = builder.no_proxy();
+    }
+
+    builder
         .build()
         .map_err(|e| format!("Failed to build HTTP client: {}", e))
+}
+
+fn base_url_uses_loopback(base_url: &str) -> bool {
+    let Ok(url) = Url::parse(base_url) else {
+        return false;
+    };
+
+    match url.host() {
+        Some(reqwest::Host::Domain(host)) => {
+            host.eq_ignore_ascii_case("localhost")
+                || host.eq_ignore_ascii_case("localhost.localdomain")
+        }
+        Some(reqwest::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(reqwest::Host::Ipv6(ip)) => ip.is_loopback(),
+        None => false,
+    }
 }
 
 /// Send a chat completion request to an OpenAI-compatible API

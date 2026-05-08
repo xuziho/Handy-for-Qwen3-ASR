@@ -14,6 +14,7 @@ pub mod handy_keys;
 mod tauri_impl;
 
 use log::{error, info, warn};
+use reqwest::Url;
 use serde::Serialize;
 use specta::Type;
 use tauri::{AppHandle, Emitter, Manager};
@@ -37,10 +38,23 @@ fn qwen_model_urls(base_url: &str) -> Vec<String> {
     if trimmed.ends_with("/v1") {
         vec![format!("{trimmed}/models")]
     } else {
-        vec![
-            format!("{trimmed}/v1/models"),
-            format!("{trimmed}/models"),
-        ]
+        vec![format!("{trimmed}/v1/models"), format!("{trimmed}/models")]
+    }
+}
+
+fn base_url_uses_loopback(base_url: &str) -> bool {
+    let Ok(url) = Url::parse(base_url) else {
+        return false;
+    };
+
+    match url.host() {
+        Some(reqwest::Host::Domain(host)) => {
+            host.eq_ignore_ascii_case("localhost")
+                || host.eq_ignore_ascii_case("localhost.localdomain")
+        }
+        Some(reqwest::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(reqwest::Host::Ipv6(ip)) => ip.is_loopback(),
+        None => false,
     }
 }
 
@@ -605,14 +619,20 @@ pub fn change_qwen_timeout_sec_setting(app: AppHandle, timeout_sec: u64) -> Resu
 
 #[tauri::command]
 #[specta::specta]
-pub async fn fetch_qwen_models(base_url: String, api_key: Option<String>) -> Result<Vec<String>, String> {
+pub async fn fetch_qwen_models(
+    base_url: String,
+    api_key: Option<String>,
+) -> Result<Vec<String>, String> {
     let urls = qwen_model_urls(&base_url);
     if urls.is_empty() {
         return Err("Base URL is empty".to_string());
     }
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(12))
+    let mut client_builder = reqwest::Client::builder().timeout(std::time::Duration::from_secs(12));
+    if base_url_uses_loopback(&base_url) {
+        client_builder = client_builder.no_proxy();
+    }
+    let client = client_builder
         .build()
         .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
 
