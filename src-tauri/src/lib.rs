@@ -15,6 +15,7 @@ pub mod portable;
 mod settings;
 mod shortcut;
 mod signal_handle;
+mod text_normalization;
 mod transcription_coordinator;
 mod tray;
 mod tray_i18n;
@@ -339,6 +340,7 @@ pub fn run(cli_args: CliArgs) {
             shortcut::change_qwen_api_key_setting,
             shortcut::change_qwen_model_id_setting,
             shortcut::change_qwen_timeout_sec_setting,
+            shortcut::change_qwen_normalize_chinese_numbers_setting,
             shortcut::fetch_qwen_models,
             shortcut::change_overlay_position_setting,
             shortcut::change_debug_mode_setting,

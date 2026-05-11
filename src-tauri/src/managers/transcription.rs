@@ -7,6 +7,7 @@ use crate::settings::{
     get_settings, AppSettings, AsrBackend, ModelUnloadTimeout, OrtAcceleratorSetting,
     WhisperAcceleratorSetting,
 };
+use crate::text_normalization::normalize_chinese_numbers;
 use anyhow::Result;
 use log::{debug, error, info, warn};
 use reqwest::blocking::{multipart, Client};
@@ -348,7 +349,12 @@ impl TranscriptionManager {
         }
 
         let parsed: QwenTranscriptionResponse = response.json()?;
-        Ok(clean_qwen_transcription_text(&parsed.text))
+        let cleaned = clean_qwen_transcription_text(&parsed.text);
+        if settings.qwen_normalize_chinese_numbers {
+            Ok(normalize_chinese_numbers(&cleaned))
+        } else {
+            Ok(cleaned)
+        }
     }
 
     /// Unloads the model immediately if the setting is enabled and the model is loaded

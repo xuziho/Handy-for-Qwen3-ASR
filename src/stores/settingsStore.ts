@@ -95,6 +95,8 @@ const settingUpdaters: {
   qwen_model_id: (value) => commands.changeQwenModelIdSetting(value as string),
   qwen_timeout_sec: (value) =>
     commands.changeQwenTimeoutSecSetting(value as number),
+  qwen_normalize_chinese_numbers: (value) =>
+    commands.changeQwenNormalizeChineseNumbersSetting(value as boolean),
   push_to_talk: (value) => commands.changePttSetting(value as boolean),
   selected_microphone: (value) =>
     commands.setSelectedMicrophone(

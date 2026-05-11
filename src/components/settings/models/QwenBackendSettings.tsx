@@ -5,6 +5,7 @@ import { useSettings } from "../../../hooks/useSettings";
 import { SettingContainer } from "../../ui/SettingContainer";
 import { Input } from "../../ui/Input";
 import { Button } from "../../ui/Button";
+import { ToggleSwitch } from "../../ui/ToggleSwitch";
 
 export const QwenBackendSettings: React.FC = () => {
   const { t } = useTranslation();
@@ -15,6 +16,8 @@ export const QwenBackendSettings: React.FC = () => {
   const qwenModelId = getSetting("qwen_model_id") || "/mnt/d/models/Qwen3-ASR-0.6B";
   const qwenApiKey = getSetting("qwen_api_key") || "";
   const qwenTimeoutSec = getSetting("qwen_timeout_sec") || 120;
+  const normalizeChineseNumbers =
+    getSetting("qwen_normalize_chinese_numbers") ?? true;
 
   const [draftBaseUrl, setDraftBaseUrl] = useState(qwenBaseUrl);
   const [draftModelId, setDraftModelId] = useState(qwenModelId);
@@ -283,6 +286,23 @@ export const QwenBackendSettings: React.FC = () => {
               />
             </SettingContainer>
           </div>
+
+          <ToggleSwitch
+            checked={normalizeChineseNumbers}
+            onChange={(enabled) =>
+              updateSetting("qwen_normalize_chinese_numbers", enabled)
+            }
+            isUpdating={isUpdating("qwen_normalize_chinese_numbers")}
+            label={t("settings.models.qwenNormalizeChineseNumbers", {
+              defaultValue: "Normalize Chinese numbers",
+            })}
+            description={t("settings.models.qwenNormalizeChineseNumbersDesc", {
+              defaultValue:
+                "Convert common spoken Chinese numbers in Qwen output to Arabic numerals before pasting.",
+            })}
+            descriptionMode="tooltip"
+            grouped
+          />
 
           {!timeoutIsValid && draftTimeoutSec.trim().length > 0 && (
             <div className="text-xs text-amber-500">

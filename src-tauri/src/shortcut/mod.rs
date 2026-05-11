@@ -623,6 +623,18 @@ pub fn change_qwen_timeout_sec_setting(app: AppHandle, timeout_sec: u64) -> Resu
 
 #[tauri::command]
 #[specta::specta]
+pub fn change_qwen_normalize_chinese_numbers_setting(
+    app: AppHandle,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.qwen_normalize_chinese_numbers = enabled;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn fetch_qwen_models(
     base_url: String,
     api_key: Option<String>,

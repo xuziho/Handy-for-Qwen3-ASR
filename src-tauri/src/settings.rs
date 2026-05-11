@@ -389,6 +389,8 @@ pub struct AppSettings {
     pub qwen_model_id: String,
     #[serde(default = "default_qwen_timeout_sec")]
     pub qwen_timeout_sec: u64,
+    #[serde(default = "default_qwen_normalize_chinese_numbers")]
+    pub qwen_normalize_chinese_numbers: bool,
     #[serde(default = "default_always_on_microphone")]
     pub always_on_microphone: bool,
     #[serde(default)]
@@ -500,6 +502,10 @@ fn default_qwen_model_id() -> String {
 
 fn default_qwen_timeout_sec() -> u64 {
     120
+}
+
+fn default_qwen_normalize_chinese_numbers() -> bool {
+    true
 }
 
 fn default_replace_sentence_period_with_space() -> bool {
@@ -847,6 +853,7 @@ pub fn get_default_settings() -> AppSettings {
         qwen_api_key: String::new(),
         qwen_model_id: default_qwen_model_id(),
         qwen_timeout_sec: default_qwen_timeout_sec(),
+        qwen_normalize_chinese_numbers: default_qwen_normalize_chinese_numbers(),
         always_on_microphone: false,
         selected_microphone: None,
         clamshell_microphone: None,
